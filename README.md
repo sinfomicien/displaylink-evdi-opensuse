@@ -19,6 +19,6 @@ The script will download the Ubuntu driver 1.0.335, and apply the needed patch, 
 
 Just after enter in the displaylink-1.0.68 directory and launch the install script:
 ```
-cd displaylink-1.0.68
+cd build/displaylink-1.0.68
 ./displaylink-installer.sh install
 ```
