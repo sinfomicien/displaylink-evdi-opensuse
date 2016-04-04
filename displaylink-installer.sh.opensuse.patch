@@ -1,0 +1,148 @@
+--- ../displaylink-driver-1.0.335/displaylink-installer.sh	2015-11-29 13:46:29.000000000 +0100
++++ displaylink-installer.sh	2016-04-04 15:26:10.896336738 +0200
+@@ -5,13 +5,21 @@
+ COREDIR=/usr/lib/displaylink
+ LOGSDIR=/var/log/displaylink
+ PRODUCT="DisplayLink Linux Software"
+-VERSION=1.0.335
++VERSION=1.0.68
+ ACTION=default
+ SYSTEMINITDAEMON=unknown
+ 
+ add_udev_rule()
+ {
+-  echo 'ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="17e9", ATTR{bNumInterfaces}=="*5", GROUP="plugdev", MODE="0660"' > /etc/udev/rules.d/99-displaylink.rules
++  local UDevRules='ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="17e9", ATTR{bNumInterfaces}=="*5", GROUP="plugdev", MODE="0660"'
++  if which lsb_release >/dev/null; then
++    local R=$(lsb_release -d -s)
++    local R=${R#\"}
++    if [ -z "${R##openSUSE Tumbleweed*}" ]; then
++      local UDevRules='ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="17e9", ATTR{bNumInterfaces}=="*5", GROUP="users", MODE="0660"'
++    fi
++  fi
++  echo ${UDevRules} > /etc/udev/rules.d/99-displaylink.rules
+   chmod 0644 /etc/udev/rules.d/99-displaylink.rules
+ }
+ 
+@@ -97,9 +105,25 @@
+   chmod 0644 /etc/init/displaylink.conf
+ }
+ 
++get_systemd_service_file()
++{
++  if which lsb_release >/dev/null; then
++    local R=$(lsb_release -d -s)
++    local R=${R#\"}
++    if [ -z "${R##openSUSE Tumbleweed*}" ]; then
++      echo "/etc/systemd/system/displaylink.service"
++      return
++    fi
++  fi
++
++  echo "/lib/systemd/system/displaylink.service"
++  return
++}
++
+ add_systemd_service()
+ {
+-  cat > /lib/systemd/system/displaylink.service <<'EOF'
++  local ServiceFile=$(get_systemd_service_file)
++  cat > ${ServiceFile} <<'EOF'
+ [Unit]
+ Description=DisplayLink Manager Service
+ After=display-manager.service
+@@ -117,7 +141,7 @@
+ 
+ EOF
+ 
+-  chmod 0644 /lib/systemd/system/displaylink.service
++  chmod 0644 ${ServiceFile}
+   systemctl enable displaylink.service
+ }
+ 
+@@ -128,8 +152,24 @@
+ 
+ remove_systemd_service()
+ {
++  local ServiceFile=$(get_systemd_service_file)
+   systemctl disable displaylink.service
+-  rm -f /lib/systemd/system/displaylink.service
++  rm -f ${ServiceFile}
++}
++
++get_pm_script()
++{
++  if which lsb_release >/dev/null; then
++    local R=$(lsb_release -d -s)
++    local R=${R#\"}
++    if [ -z "${R##openSUSE Tumbleweed*}" ]; then
++      echo "/usr/lib/systemd/system-sleep/displaylink.sh"
++      return
++    fi
++  fi
++
++  echo "/lib/systemd/system-sleep/displaylink.sh"
++  return
+ }
+ 
+ add_pm_script()
+@@ -198,14 +238,14 @@
+     ln -s $COREDIR/displaylink.sh /etc/pm/sleep.d/displaylink.sh
+   elif [ "$1" = "systemd" ]
+   then
+-    ln -s $COREDIR/displaylink.sh /lib/systemd/system-sleep/displaylink.sh
++    ln -s $COREDIR/displaylink.sh $(get_pm_script)
+   fi
+ }
+ 
+ remove_pm_scripts()
+ {
+   rm -f /etc/pm/sleep.d/displaylink.sh
+-  rm -f /lib/systemd/system-sleep/displaylink.sh
++  rm -f $(get_pm_script)
+ }
+ 
+ cleanup()
+@@ -339,7 +379,7 @@
+ 
+   # Required kernel version
+   MIN_KVER="3.14"
+-  MAX_KVER="3.19"
++  MAX_KVER="4.5.0"
+   KVER=$(uname -r)
+ 
+   version_lt $KVER $MIN_KVER &&
+@@ -348,7 +388,17 @@
+      echo "WARNING: Kernel version $KVER is not supported. Highest supported version is $MAX_KVER."
+ 
+   # Linux headers
+-  [ ! -f "/lib/modules/$KVER/build/Kbuild" ] && missing_requirement "Linux headers for running kernel, $KVER"
++  if which lsb_release >/dev/null; then
++    local R=$(lsb_release -d -s)
++    local R=${R#\"}
++    if [ -z "${R##openSUSE Tumbleweed*}" ]; then
++      [ ! -f "/lib/modules/$KVER/build/Makefile" ] && missing_requirement "Linux headers for running kernel, $KVER"
++    else
++      [ ! -f "/lib/modules/$KVER/build/Kbuild" ] && missing_requirement "Linux headers for running kernel, $KVER"
++    fi
++  else
++    [ ! -f "/lib/modules/$KVER/build/Kbuild" ] && missing_requirement "Linux headers for running kernel, $KVER"
++  fi
+ }
+ 
+ usage()
+@@ -365,11 +415,14 @@
+ {
+   if which lsb_release >/dev/null; then
+     local R=$(lsb_release -d -s)
++    local R=${R#\"}
+     echo "Distribution discovered: $R"
+     if [ -z "${R##Ubuntu 14.*}" ]; then
+       SYSTEMINITDAEMON=upstart
+     elif [ -z "${R##Ubuntu 15.*}" ]; then
+       SYSTEMINITDAEMON=systemd
++    elif [ -z "${R##openSUSE Tumbleweed*}" ]; then
++      SYSTEMINITDAEMON=systemd
+     fi
+   else
+     echo "WARNING: Unknown distribution, assuming defaults - this may fail." >&2
