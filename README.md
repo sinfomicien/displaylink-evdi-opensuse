@@ -15,10 +15,10 @@ launch the script
 ./InstallDisplayLink.sh
 ```
 
-The script will download the Ubuntu driver 1.0.335, and apply the needed patch, so that it works for openSUSE Tumbleweed.
+The script will download the Ubuntu driver 1.1.62, and apply the needed patch, so that it works for openSUSE Tumbleweed.
 
-Just after enter in the displaylink-1.0.68 directory and launch the install script:
+Just after enter in the displaylink-1.1.62 directory and launch the install script:
 ```
-cd build/displaylink-1.0.68
+cd build/displaylink-1.1.62
 ./displaylink-installer.sh install
 ```

@@ -1,13 +1,6 @@
---- ../displaylink-driver-1.0.335/displaylink-installer.sh	2015-11-29 13:46:29.000000000 +0100
-+++ displaylink-installer.sh	2016-04-04 15:26:10.896336738 +0200
-@@ -5,13 +5,21 @@
- COREDIR=/usr/lib/displaylink
- LOGSDIR=/var/log/displaylink
- PRODUCT="DisplayLink Linux Software"
--VERSION=1.0.335
-+VERSION=1.0.68
- ACTION=default
- SYSTEMINITDAEMON=unknown
+--- displaylink-installer.sh.orig	2016-05-10 12:13:27.000000000 +0200
++++ displaylink-installer.sh	2016-05-17 10:48:23.061600609 +0200
+@@ -10,7 +10,15 @@
  
  add_udev_rule()
  {
@@ -24,7 +17,7 @@
    chmod 0644 /etc/udev/rules.d/99-displaylink.rules
  }
  
-@@ -97,9 +105,25 @@
+@@ -96,9 +104,25 @@
    chmod 0644 /etc/init/displaylink.conf
  }
  
@@ -51,7 +44,7 @@
  [Unit]
  Description=DisplayLink Manager Service
  After=display-manager.service
-@@ -117,7 +141,7 @@
+@@ -116,7 +140,7 @@
  
  EOF
  
@@ -60,7 +53,7 @@
    systemctl enable displaylink.service
  }
  
-@@ -128,8 +152,24 @@
+@@ -127,8 +151,24 @@
  
  remove_systemd_service()
  {
@@ -86,7 +79,7 @@
  }
  
  add_pm_script()
-@@ -198,14 +238,14 @@
+@@ -197,14 +237,14 @@
      ln -s $COREDIR/displaylink.sh /etc/pm/sleep.d/displaylink.sh
    elif [ "$1" = "systemd" ]
    then
@@ -103,46 +96,71 @@
  }
  
  cleanup()
-@@ -339,7 +379,7 @@
- 
-   # Required kernel version
-   MIN_KVER="3.14"
--  MAX_KVER="3.19"
-+  MAX_KVER="4.5.0"
-   KVER=$(uname -r)
- 
-   version_lt $KVER $MIN_KVER &&
-@@ -348,7 +388,17 @@
-      echo "WARNING: Kernel version $KVER is not supported. Highest supported version is $MAX_KVER."
+@@ -342,7 +382,17 @@
+   version_lt "$KVER" "$KVER_MIN" && missing_requirement "Kernel version $KVER is too old. At least $KVER_MIN is required"
  
    # Linux headers
--  [ ! -f "/lib/modules/$KVER/build/Kbuild" ] && missing_requirement "Linux headers for running kernel, $KVER"
+-  [ ! -f "/lib/modules/$KVER/build/Kconfig" ] && missing_requirement "Linux headers for running kernel, $KVER"
 +  if which lsb_release >/dev/null; then
 +    local R=$(lsb_release -d -s)
 +    local R=${R#\"}
 +    if [ -z "${R##openSUSE Tumbleweed*}" ]; then
 +      [ ! -f "/lib/modules/$KVER/build/Makefile" ] && missing_requirement "Linux headers for running kernel, $KVER"
 +    else
-+      [ ! -f "/lib/modules/$KVER/build/Kbuild" ] && missing_requirement "Linux headers for running kernel, $KVER"
++      [ ! -f "/lib/modules/$KVER/build/Kconfig" ] && missing_requirement "Linux headers for running kernel, $KVER"
 +    fi
 +  else
-+    [ ! -f "/lib/modules/$KVER/build/Kbuild" ] && missing_requirement "Linux headers for running kernel, $KVER"
++    [ ! -f "/lib/modules/$KVER/build/Kconfig" ] && missing_requirement "Linux headers for running kernel, $KVER"
 +  fi
  }
  
  usage()
-@@ -365,11 +415,14 @@
+@@ -357,19 +407,21 @@
+ 
+ detect_init_daemon()
+ {
+-    INIT=$(readlink /proc/1/exe)
+-    if [ "$INIT" == "/sbin/init" ]; then
+-        INIT=$(/sbin/init --version)
+-    fi
+-
+-    [ -z "${INIT##*upstart*}" ] && SYSTEMINITDAEMON="upstart"
+-    [ -z "${INIT##*systemd*}" ] && SYSTEMINITDAEMON="systemd"
+-
+     if [ -z "$SYSTEMINITDAEMON" ]; then
+-        echo "ERROR: the installer script is unable to find out how to start DisplayLinkManager service automatically on your system." >&2
+-        echo "Please set an environment variable SYSTEMINITDAEMON to 'upstart' or 'systemd' before running the installation script to force one of the options." >&2
+-        echo "Installation terminated." >&2
+-        exit 1
++        INIT=$(readlink /proc/1/exe)
++        if [ "$INIT" == "/sbin/init" ]; then
++            INIT=$(/sbin/init --version)
++        fi
++
++        [ -z "${INIT##*upstart*}" ] && SYSTEMINITDAEMON="upstart"
++        [ -z "${INIT##*systemd*}" ] && SYSTEMINITDAEMON="systemd"
++
++        if [ -z "$SYSTEMINITDAEMON" ]; then
++            echo "ERROR: the installer script is unable to find out how to start DisplayLinkManager service automatically on your system." >&2
++            echo "Please set an environment variable SYSTEMINITDAEMON to 'upstart' or 'systemd' before running the installation script to force one of the options." >&2
++            echo "Installation terminated." >&2
++            exit 1
++        fi
+     fi
+ }
+ 
+@@ -377,10 +429,14 @@
  {
    if which lsb_release >/dev/null; then
      local R=$(lsb_release -d -s)
 +    local R=${R#\"}
      echo "Distribution discovered: $R"
-     if [ -z "${R##Ubuntu 14.*}" ]; then
-       SYSTEMINITDAEMON=upstart
-     elif [ -z "${R##Ubuntu 15.*}" ]; then
-       SYSTEMINITDAEMON=systemd
-+    elif [ -z "${R##openSUSE Tumbleweed*}" ]; then
-+      SYSTEMINITDAEMON=systemd
-     fi
+     [ -z "${R##Ubuntu 14.*}" ] && return
+     [ -z "${R##Ubuntu 15.*}" ] && return
+     [ -z "${R##Ubuntu 16.04*}" ] && return
++    if [ -z "${R##openSUSE Tumbleweed*}" ]; then
++      SYSTEMINITDAEMON="systemd"
++    fi
    else
-     echo "WARNING: Unknown distribution, assuming defaults - this may fail." >&2
+     echo "WARNING: This is not an officially supported distribution." >&2
+     echo "Please use DisplayLink Forum for getting help if you find issues." >&2
